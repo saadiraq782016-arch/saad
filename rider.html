@@ -108,7 +108,15 @@ function findNearestDriver(coords){
       const dist=Math.sqrt((lat-coords[0])**2+(lng-coords[1])**2);
       if(dist<minDist){minDist=dist;nearestPhone=d.key;}
     });
-    if(nearestPhone) db.ref("rides/"+rideId+"/assignedDriver").set(nearestPhone);
+    if(nearestPhone){
+      db.ref("rides/"+rideId+"/assignedDriver").set(nearestPhone);
+      // إرسال إشعار مباشر للسائق
+      db.ref("drivers/"+nearestPhone+"/notification").set({
+        message:"🚖 طلب جديد من راكب بالقرب منك",
+        rideId:rideId,
+        time:new Date().toISOString()
+      });
+    }
   });
 }
 

@@ -1,4 +1,4 @@
-// 🔥 تكسي العراق الشامل - إدارة الدخول والداتا الأساسية
+// 🔥 تكسي العراق الشامل - إدارة الدخول وربط Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getDatabase, ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
@@ -32,39 +32,17 @@ window.login = function(type) {
     const expireAt = new Date();
     expireAt.setDate(now.getDate() + 30); // تفعيل 30 يوم افتراضيًا
 
-    // ✅ إذا المستخدم موجود
+    // ✅ المستخدم موجود
     if (snapshot.exists()) {
       const user = snapshot.val();
 
-      // 🚫 تحقق من حالة الحظر
+      // 🚫 التحقق من حالة الحظر
       if (user.banned) {
-        alert("🚫 هذا الحساب محظور من قبل الإدارة\n📍 موقعك الحالي تم حفظه تلقائيًا في النظام.");
-        try {
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(pos => {
-              const { latitude, longitude } = pos.coords;
-              set(ref(db, "banned_locations/" + phone), {
-                lat: latitude,
-                lng: longitude,
-                time: new Date().toISOString()
-              });
-            });
-          }
-          // 🔊 تنبيه صوتي قصير
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.value = 700;
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start();
-          setTimeout(() => osc.stop(), 400);
-        } catch (e) {}
-        return; // لا يسمح بالدخول
+        alert("🚫 هذا الحساب محظور من قبل الإدارة");
+        return;
       }
 
-      // ⏳ تحقق من صلاحية السائق
+      // ⏳ التحقق من صلاحية السائق
       if (user.type === "driver" && user.expireAt) {
         const exp = new Date(user.expireAt);
         if (now > exp) {
@@ -79,7 +57,7 @@ window.login = function(type) {
       localStorage.setItem("userType", type);
       redirect(type);
     } 
-    // 🆕 إذا لم يكن موجودًا → إنشاء جديد
+    // 🆕 المستخدم جديد
     else {
       set(ref(db, "users/" + phone), {
         phone,
@@ -96,7 +74,7 @@ window.login = function(type) {
   });
 };
 
-// 🔸 تحويل المستخدم حسب نوعه
+// 🔸 توجيه المستخدم حسب نوعه
 function redirect(type) {
   if (type === "driver") window.location.href = "driver.html";
   else if (type === "rider") window.location.href = "rider.html";

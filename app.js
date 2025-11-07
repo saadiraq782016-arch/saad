@@ -14,7 +14,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// 🟢 التحقق من تسجيل الدخول سابقًا
+// 🟢 التحقق من تسجيل الدخول مسبقًا
 const savedPhone = localStorage.getItem("phone");
 const savedType = localStorage.getItem("userType");
 if (savedPhone && savedType) {
@@ -32,23 +32,55 @@ window.login = function(type) {
     const expireAt = new Date();
     expireAt.setDate(now.getDate() + 30); // تفعيل 30 يوم افتراضيًا
 
+    // ✅ إذا المستخدم موجود
     if (snapshot.exists()) {
       const user = snapshot.val();
-      if (user.banned) { alert("🚫 الحساب محظور من قبل الإدارة"); return; }
 
-      // تحقق من صلاحية السائق
-      if (user.type === "driver" && user.expireAt) {
-        const exp = new Date(user.expireAt);
-        if (now > exp) { alert("⛔ انتهت صلاحية الحساب، الرجاء مراجعة الإدارة لتجديد التفعيل."); return; }
+      // 🚫 تحقق من حالة الحظر
+      if (user.banned) {
+        alert("🚫 هذا الحساب محظور من قبل الإدارة\n📍 موقعك الحالي تم حفظه تلقائيًا في النظام.");
+        try {
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+              const { latitude, longitude } = pos.coords;
+              set(ref(db, "banned_locations/" + phone), {
+                lat: latitude,
+                lng: longitude,
+                time: new Date().toISOString()
+              });
+            });
+          }
+          // 🔊 تنبيه صوتي قصير
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = 700;
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          setTimeout(() => osc.stop(), 400);
+        } catch (e) {}
+        return; // لا يسمح بالدخول
       }
 
-      // تحديث النوع إن تغيّر
+      // ⏳ تحقق من صلاحية السائق
+      if (user.type === "driver" && user.expireAt) {
+        const exp = new Date(user.expireAt);
+        if (now > exp) {
+          alert("⛔ انتهت صلاحية الحساب، الرجاء مراجعة الإدارة لتجديد التفعيل.");
+          return;
+        }
+      }
+
+      // 🔄 تحديث النوع إن تغيّر
       update(ref(db, "users/" + phone), { type });
       localStorage.setItem("phone", phone);
       localStorage.setItem("userType", type);
       redirect(type);
-    } else {
-      // إنشاء مستخدم جديد تلقائيًا
+    } 
+    // 🆕 إذا لم يكن موجودًا → إنشاء جديد
+    else {
       set(ref(db, "users/" + phone), {
         phone,
         type,

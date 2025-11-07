@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الراكب - تكسي العراق الشامل</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+<style>
+body,html{margin:0;padding:0;height:100%;font-family:Tahoma;}
+#map{height:80vh;}
+#panel{background:#fff;text-align:center;padding:10px;box-shadow:0 -2px 5px rgba(0,0,0,0.2);}
+button{background:#ffca28;border:none;padding:10px 20px;border-radius:8px;font-weight:bold;cursor:pointer;}
+#callDriver{background:#4caf50;color:#fff;display:none;}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h3>🚖 طلب رحلة جديدة</h3>
+  <p id="status">يتم تحديد موقعك الحالي الآن...</p>
+  <button id="sendRide" disabled>إرسال الطلب</button>
+  <button id="callDriver">📞 الاتصال بالسائق</button>
+</div>
+
+<script>
+const app=firebase.initializeApp({
+  apiKey:"AIzaSyBZy7GTKn62CqeXAgm2fLrXI67P4Lc4Q3M",
+  authDomain:"taxi-15314.firebaseapp.com",
+  databaseURL:"https://taxi-15314-default-rtdb.firebaseio.com/",
+  projectId:"taxi-15314"
+});
+const db=firebase.database();
+
+let map=L.map('map').setView([33.3152,44.3661],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+let startCoords=null,endCoords=null;
+let startMarker=null,endMarker=null;
+let driverMarker=null;
+let rideId=null;
+let driverPhone=null;
+
+// 🔊 صوت التنبيهات
+function playBeep(){
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  const osc=ctx.createOscillator(); const gain=ctx.createGain();
+  osc.type="sine"; osc.frequency.value=800;
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(); setTimeout(()=>osc.stop(),300);
+}
+
+// 📍 تحديد موقع الراكب
+navigator.geolocation.getCurrentPosition(pos=>{
+  startCoords=[pos.coords.latitude,pos.coords.longitude];
+  startMarker=L.marker(startCoords).addTo(map).bindPopup("📍 موقعك الحالي").openPopup();
+  map.setView(startCoords,15);
+  document.getElementById("status").innerText="انقر على الخريطة لتحديد نقطة النهاية.";
+},err=>{
+  document.getElementById("status").innerText="⚠️ لم يتم تحديد الموقع الحالي، استخدم الخريطة لتحديد النهاية فقط.";
+});
+
+// 🗺️ اختيار نقطة النهاية
+map.on('click',function(e){
+  if(endMarker){map.removeLayer(endMarker);}
+  endCoords=[e.latlng.lat,e.latlng.lng];
+  endMarker=L.marker(endCoords).addTo(map).bindPopup("🏁 نقطة النهاية").openPopup();
+  document.getElementById("status").innerText="تم تحديد النهاية. يمكنك الآن إرسال الطلب.";
+  document.getElementById("sendRide").disabled=false;
+});
+
+// 🔸 إرسال الطلب
+document.getElementById("sendRide").onclick=function(){
+  if(!startCoords || !endCoords){alert("⚠️ يرجى تحديد الموقع والنهاية.");return;}
+  const phone=localStorage.getItem('phone')||"غير معروف";
+
+  const R=6371;
+  const dLat=(endCoords[0]-startCoords[0])*Math.PI/180;
+  const dLon=(endCoords[1]-startCoords[1])*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(startCoords[0]*Math.PI/180)*Math.cos(endCoords[0]*Math.PI/180)*Math.sin(dLon/2)**2;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  const distance=(R*c).toFixed(2);
+  const fare=Math.round(distance*1000);
+
+  rideId=Date.now();
+  db.ref("rides/"+rideId).set({
+    riderPhone:phone,
+    start:startCoords,
+    end:endCoords,
+    distance,
+    fare,
+    status:"جديدة"
+  }).then(()=>{
+    document.getElementById("status").innerHTML=`✅ تم إرسال الطلب<br>المسافة: <b>${distance}</b> كم — الأجرة: <b>${fare}</b> د.ع<br>بإنتظار السائق...`;
+    findNearestDriver(startCoords);
+  });
+};
+
+// 🔍 البحث عن أقرب سائق
+function findNearestDriver(coords){
+  db.ref("drivers").once("value").then(snap=>{
+    let minDist=999999, nearestPhone=null;
+    snap.forEach(d=>{
+      const data=d.val(); if(!data.location)return;
+      const lat=data.location.lat, lng=data.location.lng;
+      const dist=Math.sqrt((lat-coords[0])**2+(lng-coords[1])**2);
+      if(dist<minDist){minDist=dist; nearestPhone=d.key;}
+    });
+    if(nearestPhone){
+      db.ref("rides/"+rideId+"/assignedDriver").set(nearestPhone);
+    }
+  });
+}
+
+// 🟢 مراقبة التحديثات
+function listenForUpdates(){
+  if(!rideId)return;
+  db.ref("rides/"+rideId).on("value",snapshot=>{
+    const ride=snapshot.val();
+    if(!ride)return;
+
+    if(ride.status==="مقبولة"){
+      playBeep();
+      driverPhone=ride.driverPhone;
+      document.getElementById("status").innerHTML=`🚕 السائق في الطريق إليك...<br>المسافة: ${ride.distance} كم<br>الأجرة: ${ride.fare} د.ع`;
+      document.getElementById("callDriver").style.display="inline-block";
+      watchDriver(driverPhone);
+    }
+
+    if(ride.status==="منتهية"){
+      playBeep();
+      document.getElementById("status").innerHTML="🚗 تم إنهاء الرحلة — شكرًا لاستخدامك تكسي العراق الشامل";
+      if(driverMarker) map.removeLayer(driverMarker);
+      document.getElementById("callDriver").style.display="none";
+    }
+  });
+}
+listenForUpdates();
+
+// ☎️ زر الاتصال
+document.getElementById("callDriver").onclick=function(){
+  if(driverPhone) window.location.href="tel:"+driverPhone;
+  else alert("🚫 لا يوجد رقم سائق بعد.");
+};
+
+// 👀 مراقبة موقع السائق
+function watchDriver(phone){
+  db.ref("drivers/"+phone+"/location").on("value",snap=>{
+    const loc=snap.val();
+    if(!loc)return;
+    const coords=[loc.lat,loc.lng];
+    const carIcon=L.icon({
+      iconUrl:"https://cdn-icons-png.flaticon.com/512/744/744465.png",
+      iconSize:[40,40],iconAnchor:[20,20]
+    });
+    if(!driverMarker){
+      driverMarker=L.marker(coords,{icon:carIcon}).addTo(map).bindPopup("🚖 موقع السائق");
+    }else{
+      driverMarker.setLatLng(coords);
+    }
+  });
+}
+
+// 🔚 إنهاء الرحلة من الراكب
+window.onbeforeunload=function(){
+  if(rideId){
+    db.ref("rides/"+rideId).update({status:"منتهية",notification:"🚕 الراكب أنهى الرحلة"});
+  }
+};
+</script>
+</body>
+</html>

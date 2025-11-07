@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>لوحة التحكم - تكسي العراق الشامل</title>
+<style>
+body{font-family:Tahoma;background:#fff;margin:0;padding:20px;color:#222}
+h1{color:#2e7d32;text-align:center}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{border:1px solid #ccc;padding:8px;text-align:center}
+th{background:#ffeb3b}
+button{padding:6px 8px;border:0;border-radius:6px;cursor:pointer}
+.btn-edit{background:#4caf50;color:#fff}
+.btn-delete{background:#e53935;color:#fff}
+.btn-ban{background:#f44336;color:#fff}
+.btn-unban{background:#757575;color:#fff}
+.small{font-size:12px;color:#555}
+input,select{padding:5px;margin:3px}
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+</head>
+<body>
+  <h1>📋 لوحة التحكم - إدارة المستخدمين</h1>
+
+  <div>
+    <input id="searchPhone" placeholder="ابحث برقم الهاتف..." style="padding:8px;width:220px"/>
+    <button onclick="loadUsers()">تحديث القائمة</button>
+  </div>
+
+  <table id="usersTable">
+    <thead>
+      <tr>
+        <th>الهاتف</th>
+        <th>النوع</th>
+        <th>تاريخ الإنشاء</th>
+        <th>الحالة</th>
+        <th>تاريخ انتهاء التفعيل</th>
+        <th>أيام الاستخدام</th>
+        <th>إجراءات</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="editor" style="display:none;margin-top:16px;padding:12px;border:1px solid #eee;background:#fafafa">
+    <h3>تعديل المستخدم</h3>
+    <div>📱 الهاتف: <span id="edtPhone"></span></div>
+    <div style="margin-top:8px">
+      <label>نوع الحساب:
+        <select id="edtType">
+          <option value="rider">راكب</option>
+          <option value="driver">سائق</option>
+        </select>
+      </label>
+    </div>
+    <div style="margin-top:8px">
+      <label>ملاحظات: <input id="edtNote" style="width:300px" /></label>
+    </div>
+    <div style="margin-top:8px">
+      <label>تفعيل لعدد الأيام: <input type="number" id="edtDays" value="30" min="1" style="width:80px"/> يوم</label>
+    </div>
+    <div style="margin-top:8px">
+      <button onclick="saveUser()">💾 حفظ التعديلات</button>
+      <button onclick="hideEditor()">❌ إلغاء</button>
+    </div>
+  </div>
+
+<script>
+const firebaseConfig={
+  apiKey:"AIzaSyBZy7GTKn62CqeXAgm2fLrXI67P4Lc4Q3M",
+  authDomain:"taxi-15314.firebaseapp.com",
+  databaseURL:"https://taxi-15314-default-rtdb.firebaseio.com/",
+  projectId:"taxi-15314"
+};
+const app=firebase.initializeApp(firebaseConfig);
+const db=firebase.database();
+
+async function loadUsers(){
+  const q=document.getElementById('searchPhone').value.trim();
+  const snap=await db.ref('users').once('value');
+  const users=snap.val()||{};
+  const tbody=document.querySelector('#usersTable tbody');
+  tbody.innerHTML='';
+  Object.keys(users).forEach(phone=>{
+    if(q && !phone.includes(q))return;
+    const u=users[phone];
+    const status=u.banned?'محظور':'نشط';
+    const expire=u.expireAt?new Date(u.expireAt).toLocaleDateString('ar-IQ'):'—';
+    const daysLeft=u.expireAt?Math.ceil((new Date(u.expireAt)-new Date())/(1000*60*60*24)):'—';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${phone}</td>
+      <td>${u.type||'غير معروف'}</td>
+      <td class="small">${u.createdAt?u.createdAt.split('T')[0]:'—'}</td>
+      <td>${status}</td>
+      <td>${expire}</td>
+      <td>${u.type==='driver'?daysLeft:'—'}</td>
+      <td>
+        <button class="btn-edit" onclick="openEditor('${phone}')">تعديل</button>
+        <button class="btn-delete" onclick="deleteUser('${phone}')">حذف</button>
+        ${u.banned?
+          `<button class='btn-unban' onclick="setBan('${phone}',false)">فك الحظر</button>`:
+          `<button class='btn-ban' onclick="setBan('${phone}',true)">حظر</button>`
+        }
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function deleteUser(phone){
+  if(!confirm('هل أنت متأكد من حذف المستخدم '+phone+' ؟'))return;
+  db.ref('users/'+phone).remove().then(()=>{alert('تم الحذف');loadUsers();});
+}
+
+function setBan(phone,ban){
+  db.ref('users/'+phone+'/banned').set(ban)
+  .then(()=>{alert(ban?'🚫 تم الحظر':'✅ تم فك الحظر');loadUsers();});
+}
+
+function openEditor(phone){
+  db.ref('users/'+phone).once('value').then(s=>{
+    const u=s.val()||{};
+    document.getElementById('editor').style.display='block';
+    document.getElementById('edtPhone').innerText=phone;
+    document.getElementById('edtType').value=u.type||'rider';
+    document.getElementById('edtNote').value=u.note||'';
+    document.getElementById('edtDays').value=30;
+  });
+}
+
+function hideEditor(){document.getElementById('editor').style.display='none';}
+
+function saveUser(){
+  const phone=document.getElementById('edtPhone').innerText.trim();
+  const type=document.getElementById('edtType').value;
+  const note=document.getElementById('edtNote').value;
+  const days=parseInt(document.getElementById('edtDays').value);
+  const expire=new Date(); expire.setDate(expire.getDate()+days);
+  db.ref('users/'+phone).update({type,note,expireAt:expire.toISOString()})
+  .then(()=>{alert('✅ تم حفظ التعديلات');hideEditor();loadUsers();});
+}
+
+loadUsers();
+</script>
+</body>
+</html>

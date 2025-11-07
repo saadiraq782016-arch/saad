@@ -3,70 +3,59 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تكسي العراق الشامل</title>
+<title>تسجيل الدخول - تكسي العراق الشامل</title>
 <style>
-body {
-  font-family: Tahoma, sans-serif;
-  background: #f5f5f5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  margin: 0;
+body{
+  font-family:Tahoma;
+  background:#f5f5f5;
+  text-align:center;
+  margin:0;
+  padding:0;
 }
-.container {
-  background: white;
-  border-radius: 15px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.2);
-  padding: 25px;
-  width: 320px;
-  text-align: center;
+.container{
+  margin-top:100px;
+  background:#fff;
+  display:inline-block;
+  padding:25px 40px;
+  border-radius:12px;
+  box-shadow:0 0 10px rgba(0,0,0,0.1);
 }
-h2 {
-  color: #2e7d32;
-  margin-bottom: 10px;
+h1{color:#2e7d32;}
+input{
+  width:220px;
+  padding:10px;
+  margin:10px 0;
+  border:1px solid #ccc;
+  border-radius:8px;
+  font-size:16px;
+  text-align:center;
 }
-input {
-  width: 90%;
-  padding: 10px;
-  margin: 8px 0;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 16px;
+button{
+  display:inline-block;
+  padding:10px 20px;
+  margin:8px;
+  font-size:16px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  color:#fff;
+  font-weight:bold;
 }
-button {
-  width: 95%;
-  padding: 10px;
-  margin-top: 10px;
-  border: none;
-  background: #fdd835;
-  color: #000;
-  font-weight: bold;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-}
-button:hover { background: #ffee58; }
-.note {
-  font-size: 13px;
-  color: #666;
-  margin-top: 10px;
-}
+#driverBtn{background:#2e7d32;}
+#riderBtn{background:#fbc02d;color:#000;}
 </style>
 </head>
 <body>
+  <div class="container">
+    <h1>🚖 تكسي العراق الشامل</h1>
+    <p>يرجى إدخال رقم الهاتف للدخول:</p>
+    <input type="tel" id="phone" placeholder="07xxxxxxxxx" maxlength="11">
+    <div>
+      <button id="driverBtn" onclick="login('driver')">دخول كسائق</button>
+      <button id="riderBtn" onclick="login('rider')">دخول كراكب</button>
+    </div>
+  </div>
 
-<div class="container">
-  <h2>دخول إلى التطبيق</h2>
-  <input type="text" id="phone" placeholder="أدخل رقم الهاتف">
-  <button onclick="login('driver')">🚖 دخول كسائق</button>
-  <button onclick="login('rider')">🧍‍♂️ دخول كراكب</button>
-  <p class="note">📱 سيتم حفظ رقمك تلقائيًا ولن تحتاج إلى تسجيل الدخول مرة أخرى.</p>
-</div>
-
-<script type="module" src="app.js"></script>
-
+  <script type="module" src="app.js"></script>
 </body>
 </html>

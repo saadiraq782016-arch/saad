@@ -42,7 +42,7 @@ const db=firebase.database();
 const phone=localStorage.getItem("phone")||"غير معروف";
 const driverRef=db.ref("drivers/"+phone);
 
-// 🔊 صوت التنبيه
+// 🔊 صوت تنبيه
 let audioCtx=null,beepInterval=null;
 function startBeep(){
   if(audioCtx==null) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
@@ -66,7 +66,7 @@ let currentCoords=[33.3152,44.3661];
 let currentRideId=null;
 let routeControl=null;
 
-// 📍 تحديث موقع السائق في الوقت الحقيقي بدقة
+// 📍 تحديث موقع السائق
 function updateDriverLocation(){
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(pos=>{
@@ -76,10 +76,8 @@ function updateDriverLocation(){
         driverMarker=L.marker(currentCoords,{icon}).addTo(map).bindPopup("🚖 موقعي الحالي");
       } else driverMarker.setLatLng(currentCoords);
       driverRef.child("location").set({lat:currentCoords[0],lng:currentCoords[1]});
-    },err=>{
-      console.warn("⚠️ لم يتم تحديد الموقع:",err.message);
-    },{enableHighAccuracy:true,timeout:5000});
-  } else alert("⚠️ جهازك لا يدعم تحديد الموقع الجغرافي.");
+    });
+  }
 }
 setInterval(updateDriverLocation,3000);
 updateDriverLocation();
@@ -94,7 +92,7 @@ db.ref("drivers/"+phone+"/notification").on("value",snap=>{
   }
 });
 
-// 🟢 مراقبة الطلبات المرسلة للسائق الحالي
+// 🟢 مراقبة الطلبات المرسلة للسائق
 db.ref("rides").on("child_added",snap=>{
   const ride=snap.val(),id=snap.key;
   if(ride.assignedDriver!==phone||ride.status!=="جديدة")return;
@@ -112,7 +110,6 @@ db.ref("rides").on("child_added",snap=>{
       driverPhone:phone,
       notification:"✅ تم قبول الرحلة من قبل السائق"
     });
-    showRouteToRider(ride);
   };
 
   document.getElementById("reject").onclick=()=>{
@@ -122,46 +119,6 @@ db.ref("rides").on("child_added",snap=>{
   };
 });
 
-// 🚗 عرض المسار إلى الراكب ثم الوجهة
-function showRouteToRider(ride){
-  if(routeControl){map.removeControl(routeControl);}
-  const start=L.latLng(currentCoords[0],currentCoords[1]);
-  const rider=L.latLng(ride.start[0],ride.start[1]);
-  routeControl=L.Routing.control({
-    waypoints:[start,rider],
-    lineOptions:{styles:[{color:'blue',opacity:0.7,weight:5}]},
-    addWaypoints:false,fitSelectedRoutes:true,show:false
-  }).addTo(map);
-  document.getElementById("rideInfo").innerText="🚕 متجه إلى الراكب...";
-  checkArrivalToRider(ride);
-}
-
-// 👀 مراقبة الوصول إلى الراكب
-function checkArrivalToRider(ride){
-  const interval=setInterval(()=>{
-    const dx=currentCoords[0]-ride.start[0];
-    const dy=currentCoords[1]-ride.start[1];
-    const dist=Math.sqrt(dx*dx+dy*dy)*111000;
-    if(dist<100){
-      clearInterval(interval);
-      document.getElementById("rideInfo").innerText="✅ وصلت إلى الراكب، جاري التوجه إلى الوجهة...";
-      showRouteToDestination(ride);
-    }
-  },5000);
-}
-
-// 🎯 المسار إلى الوجهة
-function showRouteToDestination(ride){
-  if(routeControl){map.removeControl(routeControl);}
-  routeControl=L.Routing.control({
-    waypoints:[L.latLng(ride.start[0],ride.start[1]),L.latLng(ride.end[0],ride.end[1])],
-    lineOptions:{styles:[{color:'green',opacity:0.8,weight:5}]},
-    addWaypoints:false,fitSelectedRoutes:true,show:false
-  }).addTo(map);
-  document.getElementById("rideInfo").innerText="🚗 في الطريق إلى وجهة الراكب...";
-  document.getElementById("endRide").disabled=false;
-}
-
 // 🛑 إنهاء الرحلة
 document.getElementById("endRide").onclick=()=>{
   if(!currentRideId)return;
@@ -169,7 +126,6 @@ document.getElementById("endRide").onclick=()=>{
     status:"منتهية",
     notification:"🚗 تم إنهاء الرحلة من قبل السائق"
   });
-  if(routeControl){map.removeControl(routeControl);}
   document.getElementById("rideInfo").innerText="🚗 تم إنهاء الرحلة. بانتظار طلب جديد...";
   document.getElementById("endRide").disabled=true;
 };
